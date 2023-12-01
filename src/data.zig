@@ -12,10 +12,6 @@ pub fn batch(self: Self, offset: usize, s: usize) Self {
     const per_image_labels = self.count / self.labels.len;
     const real_count = @min(self.count - offset, s);
     const real_end = offset + real_count;
-    //@import("std").debug.print("real_end: {d}\noffset: {d}\nlabels: {d}\n", .{ real_end, offset, self.train_labels.len });
-    //@import("std").debug.print("image length: {}, per image: {}\n", .{ self.train_images.len, per_image });
-    //@import("std").debug.print("per image: {} offset: {} real end: {} real_count: {} \n", .{ per_image, offset, real_end, real_count });
-    //@import("std").debug.print("offset {} \n", .{offset});
 
     return Self{
         .count = real_count,

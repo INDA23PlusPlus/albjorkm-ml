@@ -1,9 +1,14 @@
 const std = @import("std");
 const RndGen = std.rand.DefaultPrng;
-const TrainingData = @import("data.zig");
+const DataSet = @import("data.zig");
 
 const input_size = 784;
 const output_size = 10;
+
+const NetLoadErrors = error{IncompatibleModel};
+
+/// Note that there is only a single layer, hence
+/// the neural network is shallow and not deep!
 pub const ShallowNeuralNetwork = struct {
     biases: [output_size]f64,
     weights: [output_size][input_size]f64,
@@ -13,26 +18,26 @@ pub const ShallowNeuralNetwork = struct {
     gradient_biases: [output_size]f64,
     gradient_weights: [output_size][input_size]f64,
 
-    // We do not support multiple layers, lol!
-
-    pub fn load() ShallowNeuralNetwork {
+    pub fn load() !ShallowNeuralNetwork {
         var result = new();
-        const data = @embedFile("output.dat");
+        const file = try std.fs.cwd().openFile("output.dat", .{});
+        const saved_size = output_size * 4 + input_size * output_size * 4;
+        var data: [saved_size]u8 = undefined;
+        if (try file.readAll(&data) != saved_size) {
+            return NetLoadErrors.IncompatibleModel;
+        }
 
         const biases: [output_size]f32 = std.mem.bytesToValue([output_size]f32, data[0 .. output_size * 4]);
         for (biases, 0..) |b, i| {
             result.biases[i] = b;
         }
 
-        //var checksum: f64 = 0;
         const weights: [output_size][input_size]f32 = std.mem.bytesToValue([output_size][input_size]f32, data[output_size * 4 ..]);
         for (weights, 0..) |weights_line, i| {
             for (weights_line, 0..) |w, j| {
                 result.weights[i][j] = w;
-                //checksum += w;
             }
         }
-        //std.debug.print("bias checksum is: {d}\n", .{checksum});
 
         return result;
     }
@@ -90,7 +95,7 @@ pub const ShallowNeuralNetwork = struct {
             }
         }
 
-        // Make sure the outputs are not totally crazy.
+        // Makes sure the outputs are not totally crazy.
         self.soft_max();
     }
 
@@ -113,15 +118,14 @@ pub const ShallowNeuralNetwork = struct {
         return 0 - @log(self.activations[label]);
     }
 
-    pub fn train(self: *ShallowNeuralNetwork, rate: f64, data: TrainingData) f64 {
-        var loss: f64 = 0;
+    pub fn train(self: *ShallowNeuralNetwork, rate: f64, data: DataSet) f64 {
         @memset(self.gradient_biases[0..], 0);
         for (self.gradient_weights[0..]) |*weights| {
             @memset(weights, 0);
         }
 
+        var loss: f64 = 0;
         for (0..data.count) |i| {
-            //std.debug.print("do gradients using: {} {}\n", .{ i, data.train_images.len });
             loss += self.gradient(data.images[input_size * i ..], data.labels[i]);
         }
 
@@ -137,7 +141,7 @@ pub const ShallowNeuralNetwork = struct {
     }
 };
 
-pub fn measure_model_accuracy(net: *ShallowNeuralNetwork, data: *const TrainingData) f64 {
+pub fn measure_model_accuracy(net: *ShallowNeuralNetwork, data: *const DataSet) f64 {
     var correct_guesses: f64 = 0;
     for (0..data.count) |i| {
         const per_image = data.images.len / data.count;
@@ -147,21 +151,15 @@ pub fn measure_model_accuracy(net: *ShallowNeuralNetwork, data: *const TrainingD
         var max_value = net.activations[0];
         var max_index: usize = 0;
         for (net.activations, 0..) |value, j| {
-            //std.debug.print("probability for: {} is {}\n", .{ j, net.activations[j] });
             if (value > max_value) {
                 max_index = j;
                 max_value = value;
             }
         }
         const expected = data.labels[per_image_label * i];
-        //std.debug.print("per image label: {}, guess for {} is {}, should be {}\n", .{ per_image_label, i, max_index, expected });
-        //std.debug.print("first pixel is: {}", .{input[0]});
         if (max_index == expected) {
-            // Made a correct guess.
             correct_guesses += 1;
         }
-
-        //break;
     }
 
     const count: f64 = @floatFromInt(data.count);
